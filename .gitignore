@@ -1,0 +1,15 @@
+# CLIENT DATA. Never commit anything inside clients/ except the placeholder.
+clients/*
+!clients/.gitkeep
+# Live data the app writes while running
+engine/status.json
+engine/radar_cache.json
+engine/data.json
+engine/*.tmp
+engine/history/
+__pycache__/
+*.pyc
+# Secrets, just in case
+*.key
+*api-key*
+.env

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Firm Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* FIRM RADAR — an operations room for each client. Deep slate + phosphor teal, so it never reads as the red podcast Radar.
+   Layout: sticky command bar, then one view at a time: Command (radar scope + threat meter + live feed), Overview (the
+   original Radar cards), Network, Spread Map, and the working tabs. Client View is a light, share-safe overlay. */
+:root{
+  --bg:#081014; --bg2:#0b161b; --panel:#0f1d23; --panel2:#132530; --line:#1e3540; --line2:#2a4755;
+  --ink:#dceaee; --dim:#88a1ab; --faint:#4f6874;
+  --accent:#36e0cf; --accent2:#1a9e93; --hot:#ff5547; --warn:#f5b13d; --calm:#44d38a; --quiet:#5d7480; --link:#6fb2ff;
+  --display:"Chakra Petch","Bahnschrift","Segoe UI",sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",Consolas,ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--body)}
+body{background:radial-gradient(1200px 600px at 70% -10%,rgba(54,224,207,.06),transparent 60%),var(--bg)}
+a{color:inherit}
+button,select,input,textarea{font:inherit}
+button{font-size:12.5px;background:var(--panel2);color:var(--ink);border:1px solid var(--line2);padding:6px 11px;cursor:pointer;border-radius:3px}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{border-color:var(--accent);color:var(--accent)}
+button.solid{background:var(--accent);color:#03201d;border-color:var(--accent);font-weight:600}
+button.big{font-size:15px;padding:10px 18px}
+button.on{border-color:var(--accent);color:var(--accent);background:rgba(54,224,207,.08)}
+select{font-size:13px;background:var(--panel2);color:var(--accent);border:1px solid var(--accent2);padding:5px 8px;max-width:260px;border-radius:3px}
+.mono{font-family:var(--mono)}
+
+header{position:sticky;top:0;z-index:30;background:rgba(8,16,20,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 18px 0}
+.top{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{flex:none}
+.brand .name{font:700 20px/1 var(--display);letter-spacing:.18em}
+.brand .name span{color:var(--accent)}
+.brand small{display:block;font:12px/1.5 var(--body);color:var(--dim);letter-spacing:.02em;margin-top:3px}
+.status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--dim)}
+.pill{border:1px solid var(--line);padding:4px 9px;white-space:nowrap;border-radius:3px;font-family:var(--mono);font-size:11.5px}
+.pill b{color:var(--ink);font-weight:500}
+.pill.alarm{border-color:var(--hot);color:#fff;background:rgba(255,85,71,.15)}
+nav{display:flex;gap:2px;overflow-x:auto;margin:10px -18px 0;padding:0 18px;border-top:1px solid var(--line)}
+nav button{border:0;border-bottom:2px solid transparent;background:none;padding:10px 12px;color:var(--dim);white-space:nowrap;border-radius:0;font:600 12.5px var(--display);letter-spacing:.1em;text-transform:uppercase}
+nav button.on{color:var(--ink);border-bottom-color:var(--accent);background:none}
+nav button .n{color:var(--accent);margin-left:5px;font-family:var(--mono)}
+main{padding:18px;max-width:1500px;margin:0 auto}
+h2{margin:0 0 10px;font:600 12px var(--display);letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+h2 em{font-style:normal;color:var(--accent);letter-spacing:.06em;margin-left:8px;font-family:var(--mono);font-size:11px}
+.panel{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);padding:14px;border-radius:4px;min-width:0}
+.note{font-size:12.5px;color:var(--dim);line-height:1.6}
+.empty{color:var(--dim);padding:22px;border:1px dashed var(--line2);text-align:center;border-radius:4px}
+.hide{display:none!important}
+.offline{background:#2a1512;border:1px solid var(--hot);padding:12px;margin-bottom:14px}
+
+/* ---------- COMMAND ---------- */
+.cmd{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
+@media(max-width:1050px){.cmd{grid-template-columns:minmax(0,1fr)}}
+.stack{display:grid;gap:16px;align-content:start;min-width:0}
+.scopewrap{position:relative}
+.scope{width:100%;height:auto;display:block;max-height:74vh}
+.scope .ring{fill:none;stroke:var(--line2);stroke-width:1}
+.scope .ringlab{font:600 10px var(--display);letter-spacing:.18em;fill:var(--faint)}
+.scope .tick{stroke:var(--line);stroke-width:1}
+.scope .sweep{transform-origin:300px 300px;animation:sweep 8s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.scope .blip{cursor:pointer}
+.scope .blip .dot{transition:r .3s}
+.scope .blip:hover .dot{stroke:#fff;stroke-width:2}
+.scope .blip .glow{opacity:.18;animation:ping 8s linear infinite}
+@keyframes ping{0%{opacity:.85}12%{opacity:.18}100%{opacity:.18}}
+.scope .blip .spikering{fill:none;stroke-width:1.5;animation:spike 1.6s ease-out infinite}
+@keyframes spike{from{r:8;opacity:.9}to{r:34;opacity:0}}
+.scope .blab{font:500 12.5px var(--body);fill:var(--ink);paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.scope .core{font:700 11px var(--display);letter-spacing:.14em;fill:var(--accent)}
+@media (prefers-reduced-motion:reduce){.scope .sweep,.scope .blip .glow,.scope .blip .spikering,.live .row.fresh{animation:none!important}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--dim);margin-top:8px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+
+.meter{display:grid;grid-template-columns:minmax(180px,230px) minmax(0,1fr);gap:16px;align-items:center}
+@media(max-width:560px){.meter{grid-template-columns:1fr}}
+.meter svg{width:100%;height:auto}
+.lvlword{font:700 28px/1 var(--display);letter-spacing:.08em}
+.lvl-CALM{color:var(--calm)}.lvl-WATCH{color:#9fd65a}.lvl-ELEVATED{color:var(--warn)}.lvl-HIGH{color:#ff8a3d}.lvl-SEVERE{color:var(--hot)}
+.parts{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px}
+.part{font:500 11px var(--mono);padding:3px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--dim)}
+.part b{color:var(--ink);font-weight:500}
+.part.on{border-color:var(--warn);color:var(--warn)}
+
+.crowdlist{display:grid;gap:6px}
+.crow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--quiet);border-radius:3px;cursor:pointer;background:var(--bg2)}
+.crow:hover{border-color:var(--line2)}
+.crow.lv-staged{border-left-color:var(--hot)}.crow.lv-mixed{border-left-color:var(--warn)}.crow.lv-organic{border-left-color:var(--calm)}
+.crow .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow .s{font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow .sc{font:600 12px var(--mono);color:var(--dim)}
+.crowd{font:700 9.5px var(--display);letter-spacing:.12em;padding:2px 6px;border:1px solid currentColor;white-space:nowrap;border-radius:2px}
+.cr-staged{color:#1a0503;background:var(--hot);border-color:var(--hot)} .cr-mixed{color:var(--warn)} .cr-organic{color:var(--calm)} .cr-thin{color:var(--quiet)}
+
+.live{max-height:520px;overflow:auto;display:grid;gap:0;padding-right:4px}
+.live .row{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px dotted var(--line)}
+.live .row.fresh{animation:fresh 2.5s ease-out}
+@keyframes fresh{from{background:rgba(54,224,207,.16)}to{background:transparent}}
+.live .when{font:500 11px var(--mono);color:var(--dim);padding-top:2px}
+.live .t{font-size:13px;line-height:1.35}
+.live .t a{text-decoration:none}.live .t a:hover{text-decoration:underline}
+.live .m{font-size:11px;color:var(--dim);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:3px}
+.flag{font:700 9.5px var(--display);letter-spacing:.1em;padding:0 5px;border-radius:2px}
+.flag.new{background:rgba(255,85,71,.18);color:var(--hot)}.flag.ev{background:rgba(245,177,61,.18);color:var(--warn)}
+.topicchip{font-size:10.5px;color:var(--accent);border:1px solid var(--accent2);padding:0 6px;border-radius:2px;cursor:pointer}
+.pulse svg{width:100%;height:110px;display:block}
+.watchlist{display:grid;gap:6px;margin-top:10px;font-size:13px}
+.watchlist div{display:flex;gap:8px;align-items:baseline}
+.watchlist b{font-family:var(--mono);font-weight:500;color:var(--warn);min-width:44px}
+
+/* ---------- OVERVIEW (the original Radar cards) ---------- */
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.tools input{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);padding:7px 10px;min-width:200px;flex:1;border-radius:3px;font-size:13px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--quiet);padding:12px;cursor:pointer;border-radius:4px;min-width:0}
+.card:hover{border-color:var(--line2)}
+.card.hot{border-top-color:var(--hot)}.card.warn{border-top-color:var(--warn)}
+.card h3{margin:0;font-size:14.5px;display:flex;justify-content:space-between;gap:8px}
+.tag{flex:none;font:700 10px var(--display);letter-spacing:.12em;padding:2px 6px;border:1px solid currentColor;height:fit-content;border-radius:2px}
+.tag.hot{color:#1a0503;background:var(--hot);border-color:var(--hot)}.tag.warn{color:var(--warn)}.tag.quiet{color:var(--quiet)}
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 6px}
+.nums b{display:block;font:600 20px var(--display);font-variant-numeric:tabular-nums}.nums small{color:var(--dim);font-size:11px}
+.spark{width:100%;height:46px;display:block}
+.spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.spark polygon{fill:rgba(54,224,207,.08)}
+.card.hot .spark polyline{stroke:var(--hot)}
+.meta{font-size:11.5px;color:var(--dim);margin:4px 0}
+.m-calm{color:var(--calm)}.m-warn{color:var(--warn)}.m-hot{color:var(--hot)}.m-quiet{color:var(--quiet)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
+.chip{font:10.5px var(--mono);padding:1px 6px;border:1px solid var(--line);color:var(--dim);border-radius:2px}.chip b{color:var(--ink);font-weight:500}.chip.off{opacity:.45}
+.items{list-style:none;margin:0;padding:0}
+.it{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:8px 0;border-bottom:1px dotted var(--line);align-items:start}
+.it.noimg{grid-template-columns:1fr}
+.it img{width:92px;height:56px;object-fit:cover;background:var(--panel2);border:1px solid var(--line)}
+.it .t{font-size:13px;line-height:1.35}.it .t a{text-decoration:none}.it .t a:hover{text-decoration:underline}
+.it .s{font-size:11px;color:var(--dim);margin-top:2px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pl{font:700 9.5px var(--display);letter-spacing:.08em;padding:0 5px;border:1px solid currentColor;border-radius:2px}
+.pl.GN{color:#6fb4ff}.pl.BING{color:#4fd1c5}.pl.HN{color:#ff8a3d}.pl.MASTO{color:#b48cff}.pl.BSKY{color:#3ea6ff}.pl.REDDIT{color:#ff5a36}.pl.OUT{color:var(--warn)}.pl.YT{color:#ff4d4d}.pl.GA{color:#7fe3a0}.pl.GH{color:#c9d1d9}
+.act{margin-left:auto;display:flex;gap:4px}.act button{padding:1px 6px;font-size:11px}.act button.pinned{color:var(--accent);border-color:var(--accent)}
+mark{background:var(--warn);color:#000;padding:0 1px}
+
+/* ---------- NETWORK + SPREAD ---------- */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px}
+@media(max-width:1050px){.split{grid-template-columns:minmax(0,1fr)}}
+.topicbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.topicbar button{font-size:12px}
+.canvas{width:100%;height:auto;display:block;background:radial-gradient(circle at 50% 50%,rgba(54,224,207,.05),transparent 70%);border-radius:4px}
+.net .edge{stroke:var(--line2);stroke-width:1}
+.net .edge.words{stroke:rgba(245,177,61,.55)}
+.net .edge.link{stroke:rgba(111,178,255,.55)}
+.net .node{cursor:pointer}
+.net .dim{opacity:.12}
+.net .nlab{font:500 10.5px var(--body);fill:var(--ink);paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none}
+.hubs{display:grid;gap:6px;max-height:520px;overflow:auto}
+.hub{padding:8px 10px;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:12.5px;background:var(--bg2)}
+.hub:hover,.hub.on{border-color:var(--accent)}
+.hub .k{font:700 9.5px var(--display);letter-spacing:.12em}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.stat{border:1px solid var(--line);padding:6px 10px;border-radius:3px}
+.stat b{display:block;font:600 18px var(--display)}.stat span{font-size:10.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.zone{fill:rgba(54,224,207,.035);stroke:var(--line2);stroke-dasharray:4 5}
+.zlab{font:700 12px var(--display);letter-spacing:.24em;fill:var(--faint)}
+.plat{fill:rgba(15,29,35,.92);stroke:var(--line2)}
+.plab{font:700 11px var(--display);letter-spacing:.12em;fill:var(--ink)}
+.pcount{font:500 11px var(--mono);fill:var(--dim)}
+.route{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 6;animation:dash 1.4s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-24}}
+@media (prefers-reduced-motion:reduce){.route{animation:none}}
+.rnum{font:700 11px var(--display);fill:#03201d}
+.player{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.player input[type=range]{flex:1;min-width:200px;accent-color:var(--accent)}
+.clock{font:600 14px var(--mono);color:var(--accent);min-width:150px}
+
+/* ---------- WORK TABS ---------- */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:400;letter-spacing:.08em;font-size:11px;text-transform:uppercase}
+.ok{color:var(--calm)}.bad{color:var(--hot)}
+.pin{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);padding:10px 12px;margin-bottom:10px;border-radius:3px}
+.pin textarea{width:100%;font-size:12.5px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);padding:6px;margin-top:6px;min-height:46px}
+.pin select{font-size:11.5px;color:var(--ink);border-color:var(--line)}
+.rep{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px dotted var(--line)}
+.rep a{color:var(--accent)}
+.welcome{max-width:640px;margin:8vh auto;text-align:center;display:grid;gap:14px;justify-items:center}
+.welcome h1{margin:0;font:700 30px var(--display);letter-spacing:.06em}
+.welcome p{margin:0;color:var(--dim);max-width:52ch}
+
+/* ---------- MODAL ---------- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;display:none;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+.modal.on{display:flex}
+.modal .box{background:var(--bg);border:1px solid var(--line2);max-width:1000px;width:100%;padding:18px;border-radius:5px}
+.modal h3{margin:0 0 6px;font:700 20px var(--display);letter-spacing:.04em}
+.tl{position:relative;height:38px;border-bottom:1px solid var(--line);margin:10px 0 14px}
+.tl span{position:absolute;bottom:4px;width:9px;height:9px;border-radius:50%;transform:translateX(-50%)}
+.tl small{position:absolute;bottom:-18px;font-size:10px;color:var(--dim)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.crowdbox{border:1px solid var(--line);border-left:4px solid var(--quiet);background:var(--panel);padding:10px 12px;margin:12px 0;border-radius:3px}
+.crowdbox.lv-staged{border-left-color:var(--hot);background:rgba(255,85,71,.07)}.crowdbox.lv-mixed{border-left-color:var(--warn)}.crowdbox.lv-organic{border-left-color:var(--calm)}
+.crowdbox h4{margin:0 0 4px;font:600 12.5px var(--display);letter-spacing:.14em}
+.crowdbox .why{font-size:12px;color:var(--dim)}
+.crowdbox ul{margin:6px 0;padding-left:18px;font-size:12.5px}.crowdbox li{margin:4px 0}
+.crowdbox .inn{color:var(--dim);font-size:11.5px}.crowdbox .ev{font-size:11.5px;color:var(--dim);padding-left:16px}
+.form label{display:block;font:600 11px var(--display);letter-spacing:.14em;color:var(--dim);margin:12px 0 4px}
+.form input,.form textarea{width:100%;font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line2);padding:7px 9px;border-radius:3px}
+.form textarea{min-height:74px}
+
+/* ---------- CLIENT VIEW (light, share-safe) ---------- */
+.cv{position:fixed;inset:0;z-index:60;background:#f4f6f7;color:#14222b;overflow:auto;display:none;font-family:var(--body)}
+.cv.on{display:block}
+.cv .wrap{max-width:1040px;margin:0 auto;padding:28px 24px 48px;display:grid;gap:22px}
+.cv .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.cv .bar button{background:#fff;color:#14222b;border:1px solid #c7d1d6}
+.cv .eyebrow{font:600 12px var(--display);letter-spacing:.22em;color:#5b6f78;text-transform:uppercase}
+.cv h1{margin:4px 0 0;font:700 34px/1.1 var(--display);letter-spacing:.02em;color:#0d2a33}
+.cv .hero{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:24px;align-items:center;background:#fff;border:1px solid #dbe2e5;border-radius:6px;padding:20px}
+@media(max-width:700px){.cv .hero{grid-template-columns:1fr}}
+.cv .big{font:700 46px/1 var(--display);letter-spacing:.04em}
+.cv .sub{color:#4f626b;font-size:14px;margin-top:6px}
+.cv ul.points{margin:0;padding-left:18px;font-size:15px;line-height:1.6}
+.cv table{background:#fff;border:1px solid #dbe2e5;border-radius:6px;font-size:14px}
+.cv th{color:#5b6f78;border-color:#e3e8ea}.cv td{border-color:#e3e8ea}
+.cv .pillc{font:700 10.5px var(--display);letter-spacing:.12em;padding:2px 8px;border-radius:10px}
+.cv .c-staged{background:#fde3e0;color:#a32115}.cv .c-mixed{background:#fdf0d6;color:#8a5a00}.cv .c-organic{background:#ddf3e6;color:#1d6b40}.cv .c-thin{background:#e9eef0;color:#5b6f78}
+.cv .foot{color:#5b6f78;font-size:12.5px}
+.cv .lvl-CALM{color:#1d7a46}.cv .lvl-WATCH{color:#5f8a15}.cv .lvl-ELEVATED{color:#9a6400}.cv .lvl-HIGH{color:#b5521a}.cv .lvl-SEVERE{color:#b3261e}
+@media print{header,main,.cv .bar{display:none!important}.cv{position:static;display:block}}
+</style></head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15" fill="none" stroke="#36e0cf" stroke-opacity=".5"/><circle cx="17" cy="17" r="9" fill="none" stroke="#36e0cf" stroke-opacity=".35"/><path d="M17 17 L17 2 A15 15 0 0 1 30 10 Z" fill="#36e0cf" fill-opacity=".35"/><circle cx="24" cy="11" r="2" fill="#ff5547"/><circle cx="17" cy="17" r="2" fill="#36e0cf"/></svg>
+      <div><div class="name">FIRM // <span>RADAR</span></div><small id="who">Client monitoring · Paul Edward Harris IV</small></div>
+    </div>
+    <div class="status">
+      <select id="clientSel" title="Whose Radar you're looking at"></select>
+      <button class="primary" id="newClient">+ New Client</button>
+      <span class="pill" id="spk"><b>0</b> spikes</span>
+      <span class="pill">last <b id="last">—</b></span>
+      <span class="pill">next <b id="next">—</b></span>
+      <button id="checkNow" title="Start a new round right now">Check now</button>
+      <button id="notifyBtn" title="Pop-up alerts for new spikes">Alerts: off</button>
+      <button class="solid" id="clientView" title="A clean screen to share with the client">Client View</button>
+    </div>
+  </div>
+  <nav id="tabs"></nav>
+</header>
+<main id="main"></main>
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<div class="cv" id="cv" role="dialog" aria-label="Client View"></div>
+
+<script>
+const TABS = [["command","Command"],["overview","Overview"],["network","Network"],["spread","Spread Map"],["board","Case Board"],["alerts","Alerts"],["reports","Reports"],["sources","Sources"],["help","How to use"]];
+const PL = {"Google News":"GN","Bing News":"BING","Hacker News":"HN","Mastodon":"MASTO","Bluesky":"BSKY","Reddit":"REDDIT","Outlets":"OUT","YouTube":"YT","Google Alerts":"GA","GitHub":"GH","Substack":"OUT","Medium":"OUT","Feeds":"OUT"};
+const PCOL = {GA:"#7fe3a0",GH:"#c9d1d9",GN:"#6fb4ff",BING:"#4fd1c5",HN:"#ff8a3d",MASTO:"#b48cff",BSKY:"#3ea6ff",REDDIT:"#ff5a36",OUT:"#f5b13d",YT:"#ff4d4d"};
+const LV = {staged:"#ff5547", mixed:"#f5b13d", organic:"#44d38a", thin:"#5d7480"};
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let D = null, PINS = [], CLIENTS = [], REPORTS = [], STATUS = {}, lastGen = 0, loaded = false;
+let tab = store("tab") || "command", CLIENT = store("client") || "", netTopic = null, spreadTopic = null, feedSeen = new Set();
+if(!TABS.some(t=>t[0]===tab)) tab = "command";
+
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem("firm_"+k); localStorage.setItem("firm_"+k, v); }catch(e){ return null; } }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const q = () => "?client=" + encodeURIComponent(CLIENT);
+const post = (url, body) => fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(Object.assign({client:CLIENT}, body))}).then(r=>r.json());
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const clientName = () => (CLIENTS.find(c=>c.slug===CLIENT)||{}).name || "";
+function hlWords(){ return (store("hl")||"").split(",").map(s=>s.trim()).filter(s=>s.length>1); }
+function mark(text){ let h = esc(text); const ws = hlWords(); if(!ws.length) return h; const re = new RegExp("(" + ws.map(w=>esc(w).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "gi"); return h.replace(re, "<mark>$1</mark>"); }
+function ago(ts){ if(!ts) return ""; const s = Date.now()/1000 - ts; if(s<60) return "now"; if(s<3600) return Math.round(s/60)+"m"; if(s<86400) return Math.round(s/3600)+"h"; return Math.round(s/86400)+"d"; }
+function clock(ts){ return new Date(ts*1000).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
+function key(it){ return (it.url || it.title || "").slice(0,300); }
+function isPinned(it){ return PINS.some(p => p.key === key(it)); }
+function hash(s){ let h = 2166136261; for(const c of String(s)){ h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h>>>0)/4294967295; }
+function moodLabel(t){ if(t==null) return ["NO READ","m-quiet"]; if(t>=.05) return ["CALM / POSITIVE","m-calm"]; if(t>-.05) return ["NEUTRAL","m-calm"]; if(t>-.25) return ["TENSE","m-warn"]; return ["HOSTILE / FEARFUL","m-hot"]; }
+function status(r){ if(r.stale) return ["SAVED","quiet"]; if(!(r.items||[]).length && !r.spike) return ["NO MENTIONS","quiet"]; if(r.spike) return ["SPIKE","hot"]; if((r.z||0) >= (r.z_cut||3)/2) return ["RISING","warn"]; return ["QUIET","quiet"]; }
+const vol24 = r => Object.values(r.counts||{}).reduce((s,v)=>s+(typeof v==="number"?v:0),0) || (r.items||[]).filter(x=>Date.now()/1000-x.ts<=86400).length;
+const isNewAcct = it => it.acct_created && it.ts && (it.ts - it.acct_created) < 30*86400;
+
+/* Threat score: a rule of thumb that adds four signals (standard term: composite risk score). */
+function score(r){
+  const lvl = (r.crowd||{}).level;
+  const parts = {
+    spike: r.stale ? 0 : Math.round(clamp(r.z||0, 0, 4) * 10),
+    crowd: ({staged:35, mixed:15})[lvl] || 0,
+    mood: r.tone==null ? 0 : r.tone <= -0.25 ? 15 : r.tone <= -0.05 ? 7 : 0,
+    volume: (r.latest||0) >= 5 && (r.latest||0) >= 2*Math.max(r.mean||0, 1) && (r.hist_hours||0) >= 2.5 ? 10 : 0
+  };
+  return {total: Math.min(100, parts.spike + parts.crowd + parts.mood + parts.volume), parts};
+}
+function level(s){ return s>=80?"SEVERE":s>=60?"HIGH":s>=40?"ELEVATED":s>=20?"WATCH":"CALM"; }
+const LEVEL_TEXT = {CALM:"Nothing unusual. Normal background chatter.", WATCH:"Something is moving. Keep an eye on it.", ELEVATED:"A story is building or showing warning signs. Check it today.", HIGH:"Real pressure: a surge with warning signs. Act today.", SEVERE:"A fast surge with several warning signs. Act now."};
+
+let ITEMS = {}, iid = 0;
+function reg(it){ const id = "i" + (iid++); ITEMS[id] = it; return id; }
+function itemRow(it){
+  const id = reg(it), p = PL[it.platform] || "OUT";
+  const pic = it.image ? `<img loading="lazy" src="${esc(it.image)}" alt="" onerror="this.remove();this.parentNode&&this.parentNode.classList.add('noimg')">` : "";
+  return `<li class="it ${pic?"":"noimg"}" data-plat="${esc(it.platform||"")}" data-text="${esc(((it.title||"")+" "+(it.source||"")).toLowerCase())}">${pic}<div>
+    <div class="t"><a href="${esc(it.url)}" target="_blank" rel="noopener">${mark(it.title)}</a></div>
+    <div class="s"><span class="pl ${p}">${p}</span>${esc(it.source||"")}<span>${ago(it.ts)}</span>${isNewAcct(it)?'<span class="flag new">NEW ACCOUNT</span>':""}
+      <span class="act"><button data-pin="${id}" class="${isPinned(it)?"pinned":""}" title="Pin to this client's Case Board">★</button></span></div></div></li>`;
+}
+function spark(vals){
+  if(!vals || !vals.length) return '<svg class="spark"></svg>';
+  const w=300,h=46,peak=Math.max(...vals)||1,st=w/Math.max(1,vals.length-1);
+  const pts = vals.map((v,i)=>`${(i*st).toFixed(1)},${(h-4-(v/peak)*(h-10)).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon points="0,${h} ${pts} ${w},${h}"/><polyline points="${pts}"/></svg>`;
+}
+function chips(r){
+  const c = r.counts||{}, s = r.status||{};
+  const fixed = ["Google News","Bing News","Hacker News","Mastodon","Bluesky","Reddit","Outlets","YouTube","GDELT"];
+  if(/^feed:/i.test(r.query||"")) return Object.entries(s).filter(([n])=>n!=="GDELT").map(([n,v])=>`<span class="chip ${typeof v==="number"?"":"off"}">FEED · ${esc(n)} <b>${esc(v)}</b></span>`).join("");
+  return fixed.map(n=>{
+    const st = s[n]; let lab, off=false;
+    if(n==="GDELT"){ lab = st||"—"; off = st!=="ok"; } else if(typeof st==="number"){ lab = (n==="Outlets"||n==="YouTube") ? st : (c[n]||0); } else { lab = st||"—"; off = true; }
+    return `<span class="chip ${off?"off":""}">${PL[n]||n} <b>${esc(lab)}</b></span>`; }).join("");
+}
+function crowdBadge(r){ const c = r.crowd; if(!c) return ""; const short = {staged:"STAGED?", mixed:"CHECK", organic:"ORGANIC", thin:"THIN"}[c.level] || ""; return `<span class="crowd cr-${c.level}" title="Crowd check: ${esc(c.label)}. ${esc(c.summary)}">CROWD: ${short}</span>`; }
+function crowdPanel(r){
+  const c = r.crowd;
+  if(!c) return `<div class="crowdbox"><h4>CROWD CHECK</h4><div class="why">No crowd check yet. It appears after the next round.</div></div>`;
+  const flags = (c.flags||[]).map(f=>`<li><b>${esc(f.title)}</b><div class="inn">Could be innocent: ${esc(f.innocent||"")}</div><ul class="ev">${(f.evidence||[]).map(e=>`<li><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc((e.title||"").slice(0,120))}</a> · ${esc(e.who||"")}${e.age_days!=null?` · account ${e.age_days} days old`:""}${e.ts?` · ${clock(e.ts)}`:""}</li>`).join("")}</ul></li>`).join("");
+  const org = (c.organic||[]).map(o=>`<li>${esc(o)}</li>`).join(""), notes = (c.notes||[]).map(o=>`<li>${esc(o)}</li>`).join("");
+  return `<div class="crowdbox lv-${c.level}"><h4>CROWD CHECK · <span class="crowd cr-${c.level}">${esc(c.label)}</span></h4><div>${esc(c.summary)}</div>
+    ${flags?`<div class="why" style="margin-top:8px">WARNING SIGNS (${c.score} point${c.score===1?"":"s"})</div><ul>${flags}</ul>`:""}
+    ${org?`<div class="why" style="margin-top:8px">SIGNS OF REAL PEOPLE</div><ul>${org}</ul>`:""}
+    ${notes?`<div class="why" style="margin-top:8px">ALSO NOTED (NO POINTS)</div><ul>${notes}</ul>`:""}
+    <div class="why">Looked at ${c.social_posts} social posts from ${c.accounts} accounts and ${c.articles} articles (last 24h)${c.new_known?` · ${Math.round(c.new_share*100)}% from accounts under 30 days old (normal now: ${Math.round(c.baseline_new*100)}%)`:""}. ${c.confidence!=="None"?`Confidence: <b>${esc(c.confidence)}</b>. `:""}This finds patterns, not proof: check the accounts by hand before telling a client.</div></div>`;
+}
+
+/* ===================== COMMAND ===================== */
+function scopeSVG(T){
+  const C = 300, R0 = 46, R1 = 268, rOf = s => R0 + (1 - s/100) * (R1 - R0);
+  const rings = [[0,"CALM"],[20,"WATCH"],[40,"ELEVATED"],[60,"HIGH"],[80,"SEVERE"]];
+  const n = Math.max(T.length, 1);
+  let blips = "", labels = "";
+  const placed = [];
+  T.forEach((r,i) => {
+    const sc = score(r).total, lvl = (r.crowd||{}).level || "thin";
+    const ang = (i / n) * 2*Math.PI - Math.PI/2 + (hash(r.query)-.5) * (Math.PI / n) * .8;
+    const rad = rOf(sc) + (hash(r.query+"r")-.5)*14;
+    const x = C + rad*Math.cos(ang), y = C + rad*Math.sin(ang);
+    const size = clamp(5 + Math.sqrt(vol24(r))*1.15, 5, 17), col = LV[lvl] || LV.thin;
+    const delay = (((ang + Math.PI/2) / (2*Math.PI)) * 8 + 8) % 8;
+    blips += `<g class="blip" data-topic="${T.indexOf(r)}" role="button" aria-label="${esc(r.label)}">
+      <circle class="glow" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(size*2.4).toFixed(1)}" fill="${col}" style="animation-delay:${delay.toFixed(2)}s"/>
+      ${r.spike?`<circle class="spikering" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" stroke="${col}"/>`:""}
+      <circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${size.toFixed(1)}" fill="${col}" fill-opacity=".9"/>
+      <title>${esc(r.label)} · threat ${sc} (${level(sc)}) · ${esc((r.crowd||{}).label||"")} · ${vol24(r)} items in 24h</title></g>`;
+    const right = Math.cos(ang) >= 0, lx = x + (right ? size+6 : -size-6);
+    let ly = y + 4; while(placed.some(p => Math.abs(p.y-ly) < 13 && Math.abs(p.x-lx) < 120)) ly += 13;
+    placed.push({x:lx, y:ly});
+    const lab = (r.label||"").length > 24 ? r.label.slice(0,23)+"…" : r.label;
+    labels += `<text class="blab" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${right?"start":"end"}">${esc(lab)}</text>`;
+  });
+  const ticks = Array.from({length:36}, (_,i)=>{ const a = i*Math.PI/18, r1 = i%3 ? R1-6 : R1-14; return `<line class="tick" x1="${C+r1*Math.cos(a)}" y1="${C+r1*Math.sin(a)}" x2="${C+R1*Math.cos(a)}" y2="${C+R1*Math.sin(a)}"/>`; }).join("");
+  return `<svg class="scope" viewBox="-110 0 820 600" role="img" aria-label="Threat radar: each topic is a blip; closer to the center means more urgent">
+    <defs><radialGradient id="bgGrad"><stop offset="0" stop-color="#36e0cf" stop-opacity=".09"/><stop offset="1" stop-color="#36e0cf" stop-opacity="0"/></radialGradient>
+      <linearGradient id="sweepGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#36e0cf" stop-opacity="0"/><stop offset="1" stop-color="#36e0cf" stop-opacity=".34"/></linearGradient></defs>
+    <circle cx="${C}" cy="${C}" r="${R1}" fill="url(#bgGrad)"/>
+    ${rings.map(([s,l])=>`<circle class="ring" cx="${C}" cy="${C}" r="${rOf(s)}" ${s>=60?'stroke="#3a2a2a"':""}/><text class="ringlab" x="${C+5}" y="${C-rOf(s)+13}">${l}</text>`).join("")}
+    <circle class="ring" cx="${C}" cy="${C}" r="${R0}" stroke="#36e0cf" stroke-opacity=".5"/>
+    <line class="tick" x1="${C-R1}" y1="${C}" x2="${C+R1}" y2="${C}"/><line class="tick" x1="${C}" y1="${C-R1}" x2="${C}" y2="${C+R1}"/>
+    ${ticks}
+    <g class="sweep"><path d="M${C} ${C} L${C+R1} ${C} A${R1} ${R1} 0 0 0 ${(C+R1*Math.cos(-Math.PI/5)).toFixed(1)} ${(C+R1*Math.sin(-Math.PI/5)).toFixed(1)} Z" fill="url(#sweepGrad)"/><line x1="${C}" y1="${C}" x2="${C+R1}" y2="${C}" stroke="#36e0cf" stroke-opacity=".7"/></g>
+    ${blips}${labels}
+    <text class="core" x="${C}" y="${C+4}" text-anchor="middle">CLIENT</text>
+  </svg>`;
+}
+function meterSVG(s){
+  const segs = [[0,20,"#44d38a"],[20,40,"#9fd65a"],[40,60,"#f5b13d"],[60,80,"#ff8a3d"],[80,100,"#ff5547"]];
+  const cx=120, cy=118, R=96, w=16, pt = v => { const a = Math.PI - (v/100)*Math.PI; return [cx + R*Math.cos(a), cy - R*Math.sin(a)]; };
+  const arc = (a,b) => { const [x1,y1]=pt(a), [x2,y2]=pt(b); return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`; };
+  const [nx,ny] = pt(s), na = Math.PI - (s/100)*Math.PI;
+  return `<svg viewBox="0 0 240 140" role="img" aria-label="Threat meter at ${s} of 100">
+    ${segs.map(([a,b,c])=>`<path d="${arc(a+.6,b-.6)}" stroke="${c}" stroke-width="${w}" fill="none" stroke-opacity="${s>=a?1:.22}"/>`).join("")}
+    <line x1="${cx}" y1="${cy}" x2="${(cx+(R-24)*Math.cos(na)).toFixed(1)}" y2="${(cy-(R-24)*Math.sin(na)).toFixed(1)}" stroke="#dceaee" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="6" fill="#dceaee"/>
+    <text x="${cx}" y="${cy-30}" text-anchor="middle" font-family="Chakra Petch,sans-serif" font-weight="700" font-size="30" fill="#dceaee">${s}</text>
+  </svg>`;
+}
+function liveFeed(T){
+  const evidence = new Set(); T.forEach(r => ((r.crowd||{}).flags||[]).forEach(f => (f.evidence||[]).forEach(e => evidence.add(e.url))));
+  const seen = new Set(), rows = [];
+  T.forEach((r,ti) => (r.items||[]).forEach(it => { if(!it.url || seen.has(it.url)) return; seen.add(it.url); rows.push([it, ti]); }));
+  rows.sort((a,b)=>b[0].ts - a[0].ts);
+  return rows.slice(0,45).map(([it,ti]) => {
+    const p = PL[it.platform]||"OUT", fresh = !feedSeen.has(it.url); feedSeen.add(it.url);
+    return `<div class="row ${fresh && loaded && feedSeen.size>45 ? "fresh" : ""}"><div class="when">${ago(it.ts)} ago</div><div>
+      <div class="t"><a href="${esc(it.url)}" target="_blank" rel="noopener">${mark(it.title)}</a></div>
+      <div class="m"><span class="pl ${p}">${p}</span>${esc(it.author || it.source || "")}${isNewAcct(it)?'<span class="flag new">NEW ACCOUNT</span>':""}${evidence.has(it.url)?'<span class="flag ev">IN A WARNING SIGN</span>':""}<span class="topicchip" data-topic="${ti}">${esc(T[ti].label)}</span></div></div></div>`;
+  }).join("") || '<div class="empty">Nothing collected yet.</div>';
+}
+function pulseSVG(T){
+  const n = 48, sum = Array(n).fill(0);
+  T.forEach(r => (r.hours||[]).slice(-n).forEach((v,i,arr) => { sum[n - arr.length + i] += v; }));
+  const peak = Math.max(...sum, 1), w = 600, h = 110, st = w/(n-1);
+  const pts = sum.map((v,i)=>`${(i*st).toFixed(1)},${(h-14-(v/peak)*(h-28)).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Activity across all topics, last 48 hours">
+    <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#36e0cf" stop-opacity=".35"/><stop offset="1" stop-color="#36e0cf" stop-opacity="0"/></linearGradient></defs>
+    ${[0,.25,.5,.75,1].map(f=>`<line x1="0" x2="${w}" y1="${(14+f*(h-28)).toFixed(1)}" y2="${(14+f*(h-28)).toFixed(1)}" stroke="#1e3540" stroke-width="1" vector-effect="non-scaling-stroke"/>`).join("")}
+    <polygon points="0,${h-14} ${pts} ${w},${h-14}" fill="url(#pg)"/><polyline points="${pts}" fill="none" stroke="#36e0cf" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  </svg><div class="note" style="display:flex;justify-content:space-between"><span>48h ago</span><span>busiest hour: ${Math.round(peak)} items</span><span>now</span></div>`;
+}
+function renderCommand(T){
+  const scored = T.map((r,i)=>({r,i,s:score(r)})).sort((a,b)=>b.s.total-a.s.total);
+  const top = scored[0] || {s:{total:0,parts:{}}, r:{}}, lv = level(top.s.total);
+  const crowdRank = {staged:0, mixed:1, organic:2, thin:3};
+  const crowd = T.map((r,i)=>[r,i]).sort((a,b)=>(crowdRank[(a[0].crowd||{}).level]??4)-(crowdRank[(b[0].crowd||{}).level]??4) || score(b[0]).total-score(a[0]).total);
+  const rising = T.filter(r => (r.z||0) >= 1.5 && !r.spike).sort((a,b)=>b.z-a.z);
+  const P = top.s.parts;
+  return `<div class="cmd">
+    <section class="panel scopewrap"><h2>Threat radar <em>${T.length} topics · closer to the center = more urgent</em></h2>
+      ${scopeSVG(T)}
+      <div class="legend"><span><i style="background:${LV.staged}"></i>Looks staged</span><span><i style="background:${LV.mixed}"></i>Worth a look</span><span><i style="background:${LV.organic}"></i>Looks organic</span><span><i style="background:${LV.thin}"></i>Too few posts</span><span>Bigger = more activity · pulsing ring = spike</span></div>
+    </section>
+    <div class="stack">
+      <section class="panel"><h2>Threat level</h2>
+        <div class="meter">${meterSVG(top.s.total)}<div>
+          <div class="lvlword lvl-${lv}">${lv}</div>
+          <div class="note" style="color:var(--ink);margin-top:6px">${LEVEL_TEXT[lv]}</div>
+          ${top.r.label?`<div class="note">Driven by <a href="#" data-topic="${top.i}" style="color:var(--accent)">${esc(top.r.label)}</a></div>`:""}
+          <div class="parts"><span class="part ${P.spike?"on":""}">Spike <b>+${P.spike||0}</b></span><span class="part ${P.crowd?"on":""}">Crowd <b>+${P.crowd||0}</b></span><span class="part ${P.mood?"on":""}">Mood <b>+${P.mood||0}</b></span><span class="part ${P.volume?"on":""}">Volume <b>+${P.volume||0}</b></span></div>
+        </div></div>
+        <div class="note">A rule of thumb that adds four signals (standard term: composite risk score). It points you where to look; it doesn't predict what happens next.</div>
+      </section>
+      <section class="panel"><h2>Crowd check <em>real people or staged?</em></h2><div class="crowdlist">
+        ${crowd.slice(0,7).map(([r,i])=>`<div class="crow lv-${(r.crowd||{}).level||"thin"}" data-topic="${i}"><span>${crowdBadge(r)}</span><span style="min-width:0"><div class="t">${esc(r.label)}</div><div class="s">${esc((r.crowd||{}).summary||"")}</div></span><span class="sc">${score(r).total}</span></div>`).join("")}
+      </div></section>
+    </div>
+    <section class="panel"><h2>Live feed <em>newest across ${esc(clientName())}'s topics</em></h2><div class="live" id="live">${liveFeed(T)}</div></section>
+    <div class="stack">
+      <section class="panel pulse"><h2>Pulse <em>all topics, 48 hours</em></h2>${pulseSVG(T)}</section>
+      <section class="panel"><h2>Watch next</h2><div class="watchlist">
+        ${rising.slice(0,5).map(r=>`<div><b>z ${r.z.toFixed(1)}</b><span>${esc(r.label)} is climbing but hasn't surged.</span></div>`).join("")}
+        ${T.filter(r=>((r.crowd||{}).level==="staged"||(r.crowd||{}).level==="mixed")).slice(0,3).map(r=>`<div><b style="color:${LV[r.crowd.level]}">${r.crowd.level==="staged"?"STAGED":"CHECK"}</b><span>${esc(r.label)}: check the accounts by hand before saying anything.</span></div>`).join("")}
+        ${!rising.length && !T.some(r=>["staged","mixed"].includes((r.crowd||{}).level)) ? '<div class="note">Nothing building. The Radar checks again every 15 minutes.</div>' : ""}
+        ${T.some(r=>(r.hist_hours||0) < 2.5) ? '<div class="note">Some topics are still learning what normal looks like (2.5 hours), so spikes can\'t be called on them yet.</div>' : ""}
+      </div></section>
+    </div>
+  </div>`;
+}
+
+/* ===================== NETWORK ===================== */
+let SIM = null;
+function pickNetTopic(T){
+  if(netTopic != null && T.some(r=>r.query===netTopic)) return T.find(r=>r.query===netTopic);
+  const best = [...T].sort((a,b)=>((b.graph||{}).edges||[]).length - ((a.graph||{}).edges||[]).length)[0];
+  netTopic = best && best.query; return best;
+}
+function renderNetwork(T){
+  const r = pickNetTopic(T); if(!r) return '<div class="empty">No topics yet.</div>';
+  const g = r.graph || {nodes:[], edges:[]};
+  const accts = g.nodes.filter(n=>n.type==="account"), hubs = g.nodes.filter(n=>n.type!=="account");
+  const wired = new Set(g.edges.map(e=>e.s));
+  return `<div class="topicbar">${T.map(t=>`<button class="${t.query===r.query?"on":""}" data-net="${esc(t.query)}">${esc(t.label)} <span class="mono" style="color:var(--dim)">${((t.graph||{}).edges||[]).length}</span></button>`).join("")}</div>
+  <div class="split"><section class="panel"><h2>Who is connected <em>${esc(r.label)} · last 24 hours</em></h2>
+      <div class="stats"><div class="stat"><b>${g.accounts_total||accts.length}</b><span>accounts</span></div><div class="stat"><b>${wired.size}</b><span>wired to a hub</span></div><div class="stat"><b>${hubs.filter(h=>h.type==="message").length}</b><span>shared messages</span></div><div class="stat"><b>${hubs.filter(h=>h.type==="link").length}</b><span>shared links</span></div><div class="stat"><b>${accts.filter(a=>a.new).length}</b><span>new accounts</span></div></div>
+      ${accts.length ? `<svg class="canvas net" id="net" viewBox="0 0 900 620" role="img" aria-label="Network of accounts and the messages and links they share"></svg>` : '<div class="empty">No social posts on this topic in the last 24 hours, so there is no network to draw.</div>'}
+      <div class="legend"><span><i style="background:#36e0cf"></i>Account</span><span><i style="background:#ff5547"></i>Account under 30 days old</span><span><i style="background:#5d7480"></i>News-feed bot</span><span><i style="background:#f5b13d;border-radius:2px"></i>Same words (message)</span><span><i style="background:#6fb2ff;border-radius:2px"></i>Same link</span><span>Grey message = a real news headline being shared</span></div>
+      <p class="note">How to read it: independent people float on their own around the edge. A coordinated push shows as a tight star: many accounts, often new ones, wired to the same message and the same link. Click a hub to light up who's attached. Click an account to open its post.</p>
+    </section>
+    <section class="panel"><h2>Hubs <em>${hubs.length}</em></h2><div class="hubs">
+      ${hubs.sort((a,b)=>b.size-a.size).map(h=>`<div class="hub" data-hub="${esc(h.id)}"><div class="k" style="color:${h.type==="link"?"var(--link)":h.headline?"var(--dim)":"var(--warn)"}">${h.type==="link"?"SAME LINK":h.headline?"SAME HEADLINE (NORMAL)":"SAME WORDS"} · ${h.size} ACCOUNTS${h.span_h!=null?` · ${h.span_h}h`:""}</div><div>${esc(h.label)}</div></div>`).join("") || '<div class="note">No shared messages or links: everyone is saying their own thing. That\'s what organic looks like.</div>'}
+    </div></section></div>`;
+}
+function startNetwork(T){
+  const svg = document.getElementById("net"); if(!svg) return;
+  const r = T.find(t=>t.query===netTopic); const g = r.graph;
+  const W = 900, H = 620, cx = W/2, cy = H/2;
+  const nodes = g.nodes.map(n => ({...n, x: cx + (hash(n.id)-.5)*W*.8, y: cy + (hash(n.id+"y")-.5)*H*.8, vx:0, vy:0}));
+  const idx = new Map(nodes.map((n,i)=>[n.id,i]));
+  const edges = g.edges.filter(e=>idx.has(e.s)&&idx.has(e.t)).map(e=>({...e, a: idx.get(e.s), b: idx.get(e.t)}));
+  const deg = new Map(); edges.forEach(e=>{ deg.set(e.a,(deg.get(e.a)||0)+1); deg.set(e.b,(deg.get(e.b)||0)+1); });
+  const rad = n => n.type==="account" ? clamp(4 + Math.sqrt(n.posts||1)*2.4, 4, 13) : clamp(9 + n.size*1.6, 10, 26);
+  const col = n => n.type==="link" ? "#6fb2ff" : n.type==="message" ? (n.headline ? "#5d7480" : "#f5b13d") : n.feed ? "#5d7480" : n.new ? "#ff5547" : "#36e0cf";
+  const shape = n => {
+    const R = rad(n), c = col(n);
+    if(n.type==="link") return `<polygon points="${[0,1,2,3,4,5].map(k=>`${(R*Math.cos(k*Math.PI/3)).toFixed(1)},${(R*Math.sin(k*Math.PI/3)).toFixed(1)}`).join(" ")}" fill="${c}" fill-opacity=".85" stroke="#081014"/>`;
+    if(n.type==="message") return `<rect x="${-R*.8}" y="${-R*.8}" width="${R*1.6}" height="${R*1.6}" transform="rotate(45)" fill="${c}" fill-opacity=".85" stroke="#081014"/>`;
+    return `<circle r="${R}" fill="${c}" fill-opacity="${n.feed?.6:.9}" stroke="#081014" ${n.feed?'stroke-dasharray="2 2"':""}/>`;
+  };
+  svg.innerHTML = `<g id="edges">${edges.map((e,i)=>`<line class="edge ${e.kind==="same_words"?"words":"link"}" data-e="${i}"/>`).join("")}</g>
+    <g id="nodes">${nodes.map((n,i)=>`<g class="node" data-n="${i}">${shape(n)}<title>${n.type==="account"?`${esc(n.label)} · ${n.platform} · ${n.posts} post${n.posts===1?"":"s"}${n.age_days!=null?` · account ${n.age_days} days old`:""}${n.feed?" · news-feed bot":""}`:esc(n.label)}</title></g>`).join("")}</g>
+    <g id="labels">${nodes.map((n,i)=> (n.type!=="account" || (deg.get(i)||0) >= 2 || n.new) ? `<text class="nlab" data-l="${i}" text-anchor="middle">${esc(n.type==="account" ? n.label.replace(/\.bsky\.social$/,"") : (n.type==="link" ? n.label.split("/")[0] : (n.label.slice(0,26)+(n.label.length>26?"…":""))))}</text>` : "").join("")}</g>`;
+  const E = [...svg.querySelectorAll("#edges line")], N = [...svg.querySelectorAll("#nodes g")], L = new Map([...svg.querySelectorAll("#labels text")].map(t=>[+t.dataset.l, t]));
+  function tick(alpha){
+    for(let i=0;i<nodes.length;i++){ const a = nodes[i];
+      for(let j=i+1;j<nodes.length;j++){ const b = nodes[j]; let dx = a.x-b.x, dy = a.y-b.y, d2 = dx*dx+dy*dy+.01; if(d2 > 40000) continue; const f = 900/d2*alpha; a.vx += dx*f; a.vy += dy*f; b.vx -= dx*f; b.vy -= dy*f; } }
+    edges.forEach(e => { const a = nodes[e.a], b = nodes[e.b]; const dx = b.x-a.x, dy = b.y-a.y, d = Math.sqrt(dx*dx+dy*dy)||1, f = (d-62)*.04*alpha; a.vx += dx/d*f; a.vy += dy/d*f; b.vx -= dx/d*f; b.vy -= dy/d*f; });
+    nodes.forEach((n,i) => { const free = n.type==="account" && !(deg.get(i)); const dx = n.x-cx, dy = n.y-cy, d = Math.sqrt(dx*dx+dy*dy)||1;
+      if(free){ const ex = dx/(W*.43), ey = dy/(H*.40), e = Math.sqrt(ex*ex+ey*ey)||1, f = (e - (.92 + hash(n.id)*.1))*6*alpha; n.vx -= dx/d*f; n.vy -= dy/d*f; } else { n.vx -= dx*.012*alpha; n.vy -= dy*.012*alpha; }
+      n.vx *= .82; n.vy *= .82; n.x = clamp(n.x+n.vx, 30, W-30); n.y = clamp(n.y+n.vy, 40, H-24); });
+  }
+  function draw(){
+    E.forEach((l,i)=>{ const e = edges[i], a = nodes[e.a], b = nodes[e.b]; l.setAttribute("x1",a.x.toFixed(1)); l.setAttribute("y1",a.y.toFixed(1)); l.setAttribute("x2",b.x.toFixed(1)); l.setAttribute("y2",b.y.toFixed(1)); });
+    N.forEach((g,i)=>g.setAttribute("transform",`translate(${nodes[i].x.toFixed(1)},${nodes[i].y.toFixed(1)})`));
+    L.forEach((t,i)=>{ const x = nodes[i].x; t.setAttribute("x",x.toFixed(1)); t.setAttribute("y",(nodes[i].y - rad(nodes[i]) - 5).toFixed(1)); t.setAttribute("text-anchor", x < 130 ? "start" : x > W-130 ? "end" : "middle"); });
+  }
+  if(SIM) cancelAnimationFrame(SIM);
+  if(REDUCED){ for(let k=0;k<320;k++) tick(1 - k/340); draw(); }
+  else { let k = 0; const step = () => { for(let s=0;s<3;s++) tick(Math.max(.05, 1 - k/300)); k += 3; draw(); if(k < 320 && svg.isConnected) SIM = requestAnimationFrame(step); }; step(); }
+  svg.onclick = ev => { const g2 = ev.target.closest(".node"); if(!g2) return; const n = nodes[+g2.dataset.n];
+    if(n.type==="account" && n.url) window.open(n.url, "_blank", "noopener"); else highlight(n.id); };
+  function highlight(id){
+    const on = new Set([id]); edges.forEach(e=>{ if(nodes[e.b].id===id) on.add(nodes[e.a].id); });
+    const same = svg.dataset.hl === id; svg.dataset.hl = same ? "" : id;
+    N.forEach((g2,i)=>g2.classList.toggle("dim", !same && !on.has(nodes[i].id)));
+    E.forEach((l,i)=>l.classList.toggle("dim", !same && nodes[edges[i].b].id!==id));
+    L.forEach((t,i)=>t.classList.toggle("dim", !same && !on.has(nodes[i].id)));
+    document.querySelectorAll(".hub").forEach(h=>h.classList.toggle("on", !same && h.dataset.hub===id));
+  }
+  window._netHighlight = highlight;
+}
+
+/* ===================== SPREAD MAP ===================== */
+const ZONES = [
+  {name:"NEWSROOMS", x:30, y:30, w:400, h:250, plats:[["GN",140,150],["BING",320,120],["OUT",270,215],["GA",110,235]]},
+  {name:"SOCIAL MEDIA", x:470, y:30, w:400, h:250, plats:[["BSKY",600,155],["MASTO",775,170]]},
+  {name:"VIDEO", x:30, y:310, w:400, h:200, plats:[["YT",230,415]]},
+  {name:"FORUMS & CODE", x:470, y:310, w:400, h:200, plats:[["HN",580,410],["REDDIT",700,440],["GH",810,395]]}];
+const PLATPOS = {}; ZONES.forEach(z=>z.plats.forEach(([p,x,y])=>PLATPOS[p]={x,y,zone:z.name}));
+const PNAME = {GA:"Google Alerts",GH:"GitHub",GN:"Google News",BING:"Bing News",OUT:"Outlets",BSKY:"Bluesky",MASTO:"Mastodon",YT:"YouTube",HN:"Hacker News",REDDIT:"Reddit"};
+let PLAY = null;
+function pickSpread(T){
+  if(spreadTopic != null && T.some(r=>r.query===spreadTopic)) return T.find(r=>r.query===spreadTopic);
+  const best = [...T].sort((a,b)=>vol24(b)-vol24(a))[0]; spreadTopic = best && best.query; return best;
+}
+function renderSpread(T){
+  const r = pickSpread(T); if(!r) return '<div class="empty">No topics yet.</div>';
+  return `<div class="topicbar">${T.map(t=>`<button class="${t.query===r.query?"on":""}" data-spread="${esc(t.query)}">${esc(t.label)} <span class="mono" style="color:var(--dim)">${vol24(t)}</span></button>`).join("")}</div>
+  <section class="panel"><h2>Where it's moving <em>${esc(r.label)} · <span id="window"></span></em></h2>
+    <div class="player"><button class="solid" id="play">▶ Replay</button><input type="range" id="scrub" min="0" max="1000" value="1000" aria-label="Time"><span class="clock" id="clock"></span></div>
+    <svg class="canvas" id="spread" viewBox="0 0 900 640" role="img" aria-label="Spread map: where in the news and social ecosystem this story appeared, and in what order"></svg>
+    <p class="note">Each dot is one story or post, placed in the part of the information world where it appeared. The numbered dashed path shows the order the story reached each place. Press Replay to watch it unfold. The Radar keeps the newest 60 items per topic, so on a busy topic the replay covers the last hour or two; on a quiet one, up to 24 hours. "Where" here means where in the media ecosystem; real geography needs location data these free sources don't give reliably.</p>
+  </section>`;
+}
+function startSpread(T){
+  const svg = document.getElementById("spread"); if(!svg) return;
+  const r = T.find(t=>t.query===spreadTopic), now = Date.now()/1000, day0 = now - 86400;
+  const kept = (r.items||[]).filter(x=>x.ts && x.ts >= day0);
+  const t0 = kept.length ? Math.max(day0, Math.min(...kept.map(x=>x.ts)) - 300) : day0, span = Math.max(now - t0, 600);
+  const items = kept.map(x=>({...x, p: PL[x.platform]||"OUT"})).filter(x=>PLATPOS[x.p]).sort((a,b)=>a.ts-b.ts);
+  const counts = {}; items.forEach(x=>counts[x.p]=(counts[x.p]||0)+1);
+  const first = {}; items.forEach(x=>{ if(!(x.p in first)) first[x.p] = x.ts; });
+  const order = Object.entries(first).sort((a,b)=>a[1]-b[1]);
+  const prad = p => clamp(24 + Math.sqrt(counts[p]||0)*6, 24, 62);
+  const per = {}; items.forEach(x=>{ per[x.p] = (per[x.p]||0)+1; x.k = per[x.p]-1; });
+  const dotPos = x => { const P = PLATPOS[x.p], R = prad(x.p)-8, k = x.k, a = k*2.39996, rr = Math.sqrt((k+.5)/Math.max(counts[x.p],1))*R; return [P.x + rr*Math.cos(a), P.y + rr*Math.sin(a)]; };
+  const bins = Array(24).fill(0).map(()=>({})); items.forEach(x=>{ const b = clamp(Math.floor((x.ts-t0)/span*24),0,23); bins[b][x.p] = (bins[b][x.p]||0)+1; });
+  const spanTxt = span >= 82800 ? "24 hours" : span >= 3600 ? `${(span/3600).toFixed(1)} hours` : `${Math.round(span/60)} minutes`;
+  const win = document.getElementById("window"); if(win) win.textContent = `${items.length} newest of ${vol24(r)} items · covers the last ${spanTxt}`;
+  const bmax = Math.max(1, ...bins.map(b=>Object.values(b).reduce((s,v)=>s+v,0)));
+  const route = order.map(([p])=>PLATPOS[p]);
+  let routeD = route.length>1 ? `M${route[0].x} ${route[0].y}` : "";
+  for(let i=1;i<route.length;i++){ const a = route[i-1], b = route[i], mx = (a.x+b.x)/2, my = (a.y+b.y)/2, dx = b.x-a.x, dy = b.y-a.y, L = Math.sqrt(dx*dx+dy*dy)||1, bend = Math.min(140, L*.32) * (i%2 ? 1 : -1);
+    routeD += ` Q${(mx - dy/L*bend).toFixed(1)} ${(my + dx/L*bend).toFixed(1)} ${b.x} ${b.y}`; }
+  svg.innerHTML = `
+    ${ZONES.map(z=>`<rect class="zone" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="28"/><text class="zlab" x="${z.x+20}" y="${z.y+28}">${z.name}</text>`).join("")}
+    ${routeD?`<path class="route" d="${routeD}"/>`:""}
+    ${Object.entries(PLATPOS).map(([p,P])=>`<g><circle class="plat" cx="${P.x}" cy="${P.y}" r="${prad(p)}" stroke="${counts[p]?PCOL[p]:"#2a4755"}" stroke-opacity="${counts[p]?.8:.5}"/>
+      <text class="plab" x="${P.x}" y="${P.y+prad(p)+16}" text-anchor="middle" fill="${counts[p]?PCOL[p]:"#4f6874"}">${PNAME[p]}</text>
+      <text class="pcount" id="c-${p}" x="${P.x}" y="${P.y+prad(p)+30}" text-anchor="middle">${counts[p]||0}</text></g>`).join("")}
+    <g id="dots">${items.map((x,i)=>{ const [dx,dy] = dotPos(x); return `<circle data-i="${i}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3.4" fill="${PCOL[x.p]}"><title>${esc(clock(x.ts)+" · "+(x.author||x.source||"")+": "+x.title)}</title></circle>`; }).join("")}</g>
+    ${order.map(([p,ts],i)=>{ const P = PLATPOS[p], R = prad(p), ax = P.x + R*.72, ay = P.y - R*.72; return `<g><circle cx="${ax}" cy="${ay}" r="11" fill="#36e0cf"/><text class="rnum" x="${ax}" y="${ay+4}" text-anchor="middle">${i+1}</text><text class="pcount" x="${ax+15}" y="${ay+4}" fill="#36e0cf">${clock(ts)}</text></g>`; }).join("")}
+    <g transform="translate(30,540)"><text class="zlab" x="0" y="-8" style="letter-spacing:.16em">ACTIVITY OVER THE REPLAY WINDOW</text>
+      ${bins.map((b,i)=>{ let y = 70; return Object.entries(b).map(([p,v])=>{ const hgt = v/bmax*62; y -= hgt; return `<rect x="${i*35}" y="${y.toFixed(1)}" width="29" height="${hgt.toFixed(1)}" fill="${PCOL[p]}" fill-opacity=".8"/>`; }).join(""); }).join("")}
+      <line id="playhead" x1="840" x2="840" y1="-4" y2="72" stroke="#36e0cf" stroke-width="2"/></g>`;
+  const dots = [...svg.querySelectorAll("#dots circle")], scrub = document.getElementById("scrub"), clk = document.getElementById("clock"), ph = svg.querySelector("#playhead");
+  function setT(f){
+    const T1 = t0 + f*span, live = {}; dots.forEach((d,i)=>{ const on = items[i].ts <= T1; d.style.display = on ? "" : "none"; if(on) live[items[i].p] = (live[items[i].p]||0)+1; });
+    Object.keys(PLATPOS).forEach(p=>{ const c = svg.querySelector("#c-"+p); if(c) c.textContent = live[p]||0; });
+    clk.textContent = f >= .999 ? "Now" : new Date(T1*1000).toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"});
+    ph.setAttribute("x1", (f*840).toFixed(1)); ph.setAttribute("x2", (f*840).toFixed(1));
+  }
+  scrub.oninput = () => { if(PLAY) cancelAnimationFrame(PLAY); setT(scrub.value/1000); };
+  document.getElementById("play").onclick = () => {
+    if(PLAY) cancelAnimationFrame(PLAY);
+    if(REDUCED){ scrub.value = 1000; setT(1); return; }
+    const start = performance.now(), dur = 12000;
+    const step = t => { const f = Math.min(1, (t-start)/dur); scrub.value = Math.round(f*1000); setT(f); if(f < 1 && svg.isConnected) PLAY = requestAnimationFrame(step); };
+    PLAY = requestAnimationFrame(step);
+  };
+  setT(1);
+}
+
+/* ===================== CLIENT VIEW ===================== */
+function openClientView(){
+  const T = (D && D.topics) || [], scored = T.map(r=>({r, s:score(r).total})).sort((a,b)=>b.s-a.s);
+  const top = scored[0] || {s:0, r:{}}, lv = level(top.s);
+  const staged = T.filter(r=>(r.crowd||{}).level==="staged"), mixed = T.filter(r=>(r.crowd||{}).level==="mixed");
+  const loud = [...T].sort((a,b)=>vol24(b)-vol24(a))[0];
+  const sour = T.filter(r=>r.tone!=null && r.tone<=-0.25);
+  const points = [];
+  if(loud) points.push(`<b>${esc(loud.label)}</b> is the most-discussed topic we watch for you: about ${vol24(loud)} stories and posts in the last 24 hours.`);
+  points.push(staged.length ? `We see signs of a coordinated push on <b>${staged.map(r=>esc(r.label)).join(", ")}</b>. We are verifying the accounts before drawing conclusions.` : mixed.length ? `One warning sign showed up on <b>${mixed.map(r=>esc(r.label)).join(", ")}</b>. It's most likely ordinary activity; we're confirming.` : `No sign of a fake crowd on any topic. The conversation looks like real, varied people.`);
+  points.push(T.some(r=>r.spike) ? `Unusual surge right now on <b>${T.filter(r=>r.spike).map(r=>esc(r.label)).join(", ")}</b>.` : `No unusual surges right now.`);
+  if(sour.length) points.push(`Tone is hostile on <b>${sour.map(r=>esc(r.label)).join(", ")}</b>.`);
+  const g = (D && D.generated) || Date.now()/1000;
+  document.getElementById("cv").innerHTML = `<div class="wrap">
+    <div class="bar"><div class="eyebrow">Narrative status · prepared by Paul Edward Harris IV</div><div style="display:flex;gap:8px"><button id="cvPrint">Print</button><button id="cvClose">Close (Esc)</button></div></div>
+    <div><div class="eyebrow">${new Date(g*1000).toLocaleString([], {weekday:"long", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"})}</div><h1>${esc(clientName())}</h1></div>
+    <div class="hero"><div><div class="eyebrow">Current level</div><div class="big lvl-${lv}">${lv}</div><div class="sub">${LEVEL_TEXT[lv]}</div></div>
+      <ul class="points">${points.map(p=>`<li>${p}</li>`).join("")}</ul></div>
+    <table><thead><tr><th>What we watch</th><th>Last 24 hours</th><th>Right now</th><th>Real people?</th><th>Tone</th></tr></thead><tbody>
+      ${[...T].sort((a,b)=>score(b).total-score(a).total).map(r=>{ const c = (r.crowd||{}).level||"thin"; return `<tr><td><b>${esc(r.label)}</b></td><td>${vol24(r)} stories and posts</td><td>${r.spike?"Surging":(r.z||0)>=1.5?"Rising":"Normal"}</td><td><span class="pillc c-${c}">${({staged:"POSSIBLE PUSH",mixed:"CHECKING",organic:"YES",thin:"TOO EARLY"})[c]}</span></td><td>${moodLabel(r.tone)[0].toLowerCase()}</td></tr>`; }).join("")}
+    </tbody></table>
+    <div class="foot">We check public news and social media every 15 minutes and alert you the same day if anything significant moves. "Real people?" is an automated pattern check confirmed by an analyst before any conclusion is reported. Public sources only.</div>
+  </div>`;
+  document.getElementById("cv").classList.add("on");
+}
+
+/* ===================== OVERVIEW + WORK TABS ===================== */
+function card(r, i){
+  const [st, cls] = status(r), [m, mc] = moodLabel(r.tone);
+  const first = (r.first||[]).slice(0,4).map(([p,t])=>`${PL[p]||p} ${clock(t)}`).join(" → ");
+  const heads = (r.headlines||[]).slice(0,3).map(h=>itemRow({title:h.title,url:h.url,source:h.domain,platform:h.platform,ts:h.ts,image:h.image})).join("");
+  return `<div class="card ${cls}" data-topic="${i}" data-text="${esc(((r.label||"")+" "+(r.items||[]).map(x=>x.title).join(" ")).toLowerCase())}">
+    <h3>${mark(r.label||r.query)}<span style="display:flex;gap:4px;flex:none">${crowdBadge(r)}<span class="tag ${cls}">${st}</span></span></h3>
+    <div class="nums"><div><b>${Math.round(r.latest||0)}</b><small>last hour</small></div><div><b>${(r.mean||0).toFixed(1)}</b><small>normal hour</small></div><div><b>${(r.z||0).toFixed(1)}</b><small>z-score</small></div></div>
+    ${spark(r.hours)}<div class="meta">${esc(r.signal||"")}</div>
+    <div class="meta">MOOD <b class="${mc}">${m}</b> ${r.tone!=null?(r.tone>0?"+":"")+r.tone.toFixed(2):""} · THREAT <b>${score(r).total}</b></div>
+    <div class="chips">${chips(r)}</div>
+    ${first?`<div class="meta">FIRST SEEN <span style="color:var(--ink)">${esc(first)}</span></div>`:""}
+    <ul class="items">${heads}</ul><div class="meta" style="margin-top:6px;color:var(--accent)">Click for all ${(r.items||[]).length} stories and the full crowd check →</div></div>`;
+}
+function renderTabs(){
+  document.getElementById("tabs").innerHTML = CLIENTS.length ? TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?"on":""}">${l}${k==="board"&&PINS.length?`<span class="n">${PINS.length}</span>`:""}${k==="alerts"&&(D&&D.alerts||[]).length?`<span class="n">${D.alerts.length}</span>`:""}${k==="reports"&&REPORTS.length?`<span class="n">${REPORTS.length}</span>`:""}</button>`).join("") : "";
+}
+function render(){
+  ITEMS = {}; iid = 0;
+  const m = document.getElementById("main"), T = (D && D.topics) || [], spikes = T.filter(t=>t.spike).length;
+  const spk = document.getElementById("spk"); spk.classList.toggle("alarm", spikes>0); spk.querySelector("b").textContent = spikes;
+  const g = (D && D.generated) || STATUS.generated; document.getElementById("last").textContent = g ? clock(g) : "—";
+  document.getElementById("who").textContent = CLIENT ? "Client Radar · " + clientName() : "Client monitoring · Paul Edward Harris IV";
+  document.getElementById("clientView").disabled = !CLIENT;
+  renderTabs();
+  let html = location.protocol === "file:" ? '<div class="offline">You opened this file directly. Start the Firm Radar with <b>Start Firm Radar.bat</b>, then use <b>http://localhost:8865</b> so the buttons work.</div>' : "";
+  if(!loaded){ m.innerHTML = html + '<div class="empty">Connecting to the Firm Radar…</div>'; return; }
+  if(!CLIENTS.length){ m.innerHTML = html + `<div class="welcome"><svg width="120" height="120" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15" fill="none" stroke="#36e0cf" stroke-opacity=".5"/><circle cx="17" cy="17" r="9" fill="none" stroke="#36e0cf" stroke-opacity=".3"/><path d="M17 17 L17 2 A15 15 0 0 1 30 10 Z" fill="#36e0cf" fill-opacity=".3"/><circle cx="17" cy="17" r="1.6" fill="#36e0cf"/></svg><h1>No clients yet</h1><p>Each client gets a private operations room built from their name, the issues they care about, and their competitors or opponents. It starts watching the moment you add them.</p><button class="solid big" id="newClient2">+ Add your first client</button><p class="note">Your podcast Narrative Radar is separate, at localhost:8765.</p></div>`; return; }
+  const waiting = !D || D.waiting;
+  if(waiting && ["command","overview","network","spread"].includes(tab)){ m.innerHTML = html + `<div class="empty">Checking ${esc(clientName())}'s topics for the first time. Everything fills in when the round finishes (a few minutes).</div>`; return; }
+  if(tab==="command") html += renderCommand(T);
+  else if(tab==="overview"){
+    const sorted = T.map((t,i)=>[t,i]).sort((a,b)=>(b[0].z||0)-(a[0].z||0));
+    html += `<div class="tools"><input id="search" placeholder="Search ${esc(clientName())}'s stories…"><input id="hl" placeholder="Highlight words, comma separated" value="${esc(store("hl")||"")}"></div>
+      <div class="tools"><input id="newTopic" placeholder="Add a topic (a name, place, issue or competitor) or paste a feed link (Google Alert, YouTube, GitHub, Bluesky…)"><button class="primary" id="addTopic">+ Add to watchlist</button></div>
+      <details class="panel" style="margin-bottom:14px"><summary style="cursor:pointer;color:var(--accent);font-weight:600">Watch places the Radar can't search: Google Alerts and other feeds</summary><div class="note" style="color:var(--ink);margin-top:8px;max-width:90ch">
+        <p><b>Google Alerts</b> (best for X, LinkedIn and the wider web): go to google.com/alerts, type the name in quotes, click <b>Show options</b>, set <b>Deliver to: RSS feed</b>, click <b>Create Alert</b>, then right-click the orange RSS icon, copy the link, and paste it in the box above.</p>
+        <p><b>YouTube channel</b>: https://www.youtube.com/feeds/videos.xml?channel_id=<i>your channel ID</i> · <b>GitHub</b>: https://github.com/<i>username</i>.atom · <b>Bluesky profile</b>: https://bsky.app/profile/<i>handle</i>/rss · <b>Substack</b>: https://<i>name</i>.substack.com/feed</p>
+        <p>X, LinkedIn, Facebook, Instagram and TikTok don't offer free feeds or search. Google Alerts catches pages that quote or link them.</p></div></details>
+      <div class="cards">${sorted.map(([t,i])=>card(t,i)).join("") || '<div class="empty">No topics yet. Add one above.</div>'}</div>`;
+  }
+  else if(tab==="network") html += renderNetwork(T);
+  else if(tab==="spread") html += renderSpread(T);
+  else if(tab==="board"){
+    html += `<h2>Case Board <em>${PINS.length} pinned</em></h2><p class="note">Pin stories with ★ (on the Overview cards and in any topic). Notes appear in this client's weekly brief under "Analyst notes".</p>
+      <div class="tools"><button class="primary" id="exportPins">Download as notes (.md)</button><button id="clearPins">Clear board</button></div>
+      ${PINS.length ? PINS.map((p,i)=>`<div class="pin"><div class="t"><a href="${esc(p.url)}" target="_blank" rel="noopener">${mark(p.title)}</a></div>
+        <div class="meta"><span class="pl ${PL[p.platform]||"OUT"}">${PL[p.platform]||"OUT"}</span> ${esc(p.source||"")} · pinned ${new Date(p.pinned_at).toLocaleString()} · <select data-tagpin="${i}">${["Lead","Evidence","Claim to check","Tell / red flag","For the brief"].map(t=>`<option ${p.tag===t?"selected":""}>${t}</option>`).join("")}</select> · <button data-unpin="${i}">remove</button></div>
+        <textarea data-notepin="${i}" placeholder="Your note: why this matters to the client, what to check…">${esc(p.note||"")}</textarea></div>`).join("") : '<div class="empty">Nothing pinned yet.</div>'}`;
+  } else if(tab==="alerts"){
+    const a = (D && D.alerts) || [];
+    html += `<h2>Alert log</h2><table><thead><tr><th>Time</th><th>Topic</th><th>z</th><th>Top headline</th></tr></thead><tbody>${a.map(x=>`<tr><td class="mono">${esc(x.time)}</td><td>${esc(x.query)}</td><td class="mono">${esc(x.z)}</td><td><a href="${esc(x.url)}" target="_blank" rel="noopener">${mark(x.top_headline)}</a></td></tr>`).join("") || '<tr><td colspan="4" class="note">No spikes yet.</td></tr>'}</tbody></table>`;
+  } else if(tab==="reports"){
+    html += `<h2>Weekly briefs</h2><p class="note">One click turns this client's week into a written brief: what moved, what looked coordinated, what to watch next, each with a confidence level. It opens in a new tab: read it, click <b>Edit text</b> to fix anything, <b>Save edits</b>, then <b>Print / Save as PDF</b>.</p>
+      <div class="tools"><select id="repDays" style="color:var(--ink);border-color:var(--line2)"><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option><option value="1">Last 24 hours</option></select><button class="primary" id="makeReport">Make weekly brief</button><span class="note" id="repMsg"></span></div>
+      <h2 style="margin-top:14px">Past briefs</h2>${REPORTS.length ? REPORTS.map(r=>`<div class="rep"><a href="/report?client=${encodeURIComponent(CLIENT)}&file=${encodeURIComponent(r.file)}" target="_blank" rel="noopener">${esc(r.file.replace(".html",""))}</a><span class="note">saved ${new Date(r.time*1000).toLocaleString()}</span></div>`).join("") : '<div class="empty">No briefs yet.</div>'}`;
+  } else if(tab==="sources"){
+    const h = (D && D.health) || {};
+    html += `<h2>Sources <em>${Object.keys(h).length} connected this round</em></h2><p class="note">Numbers = stories found this round across all clients. "blocked" = that site refused this round; it tries again next round.</p>
+      <table><thead><tr><th>Source</th><th>This round</th></tr></thead><tbody>${Object.entries(h).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="${typeof v==="number"?"ok":"bad"}">${esc(v)}</td></tr>`).join("")}</tbody></table><p class="note">Round took ${D&&D.round_secs||"?"} seconds · mood engine: ${esc(D&&D.mood_engine||"")}</p>`;
+  } else if(tab==="help"){
+    html += `<h2>How to use the Firm Radar</h2><div class="panel note" style="color:var(--ink);max-width:80ch">
+      <p><b>Command</b> is each client's operations room. The <b>threat radar</b> puts the client at the center and each topic as a blip: the closer to the center, the more urgent. Color is the crowd check, size is how much is being said, a pulsing ring means a spike. The <b>threat meter</b> adds four signals (spike, crowd, mood, volume) into one 0–100 score and shows which topic drives it. The <b>live feed</b> shows the newest stories and posts, marking brand-new accounts and posts that appear in a warning sign.</p>
+      <p><b>Overview</b> is the original Radar: one card per topic, with every number. Add topics here.</p>
+      <p><b>Network</b> shows who is connected: accounts wired to the same message or the same link. A loose cloud is normal; a tight star of new accounts around one message is the pattern to check by hand.</p>
+      <p><b>Spread Map</b> shows where a story appeared (newsrooms, social media, forums, video) and in what order, with a replay of the last 24 hours.</p>
+      <p><b>Client View</b> (top right) is a clean, light screen you can share on a call. It shows no account names, notes or evidence links.</p>
+      <p><b>Case Board</b>, <b>Alerts</b>, <b>Reports</b> and <b>Sources</b> work as before. Each client's files are in the <b>clients</b> folder. Your podcast Narrative Radar is a separate app at localhost:8765.</p></div>`;
+  }
+  m.innerHTML = html;
+  if(tab==="network") startNetwork(T);
+  if(tab==="spread") startSpread(T);
+  applySearch();
+}
+function applySearch(){ const el = document.getElementById("search"); const s = el ? el.value.toLowerCase().trim() : ""; document.querySelectorAll(".cards [data-text]").forEach(e => e.classList.toggle("hide", !!s && !e.dataset.text.includes(s))); }
+function openTopic(i){
+  const r = D.topics[i]; if(!r) return;
+  const items = r.items||[]; const now = Date.now()/1000; const plats = [...new Set(items.map(x=>x.platform))];
+  const tl = items.filter(x=>now-x.ts<=86400).map(x=>`<span title="${esc(x.platform+": "+x.title)}" style="left:${(100-(now-x.ts)/864).toFixed(2)}%;background:${PCOL[PL[x.platform]]||"#ccc"}"></span>`).join("");
+  const s = score(r);
+  document.getElementById("modalBox").innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><h3>${esc(r.label||r.query)}</h3><div style="display:flex;gap:6px;flex-wrap:wrap"><button data-gonet="${esc(r.query)}">Open in Network</button><button data-gospread="${esc(r.query)}">Open in Spread Map</button><button id="closeModal">Close ✕</button></div></div>
+    <div class="meta">${esc(r.signal||"")} · last hour ${Math.round(r.latest||0)} vs normal ${(r.mean||0).toFixed(1)} · z ${(r.z||0).toFixed(1)} · threat ${s.total} (${level(s.total)})</div>
+    <div class="chips">${chips(r)}</div>${crowdPanel(r)}
+    <h2 style="margin-top:12px">Last 24 hours · each dot is one story (left = 24h ago, right = now)</h2>
+    <div class="tl">${tl}<small style="left:0">24h ago</small><small style="right:0">now</small></div>
+    <div class="filters" style="margin-top:22px">${["All",...plats].map(p=>`<button data-mf="${esc(p)}" class="${p==="All"?"on":""}">${esc(PL[p]||p)}</button>`).join("")}</div>
+    <ul class="items" id="modalItems">${items.map(x=>itemRow(x)).join("")}</ul>
+    <div class="tools" style="margin-top:14px"><button id="rmTopic" data-line="${esc(r.query)}">Stop watching this topic for ${esc(clientName())}</button><span class="note" id="rmMsg"></span></div>`;
+  document.getElementById("modal").classList.add("on");
+}
+function newClientForm(){
+  document.getElementById("modalBox").innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px"><h3>New client</h3><button id="closeModal">Close ✕</button></div>
+    <p class="note">This sets up a separate, private Radar for one client. It starts watching right away. You can add or remove topics later on their Overview tab.</p>
+    <div class="form"><label for="ncName">CLIENT NAME (the person, company or campaign)</label><input id="ncName" placeholder="e.g. Cape Harbor Water Co.">
+    <label for="ncIssues">THEIR ISSUES · one per line (what they care about, what could be used against them)</label><textarea id="ncIssues" placeholder="water rates&#10;PFAS&#10;pipe replacement"></textarea>
+    <label for="ncComps">COMPETITORS OR OPPONENTS · one per line</label><textarea id="ncComps" placeholder="Bay State Water&#10;Citizens for Fair Rates"></textarea>
+    <label for="ncNotes">NOTES (only you see these)</label><textarea id="ncNotes" placeholder="Who referred them, what they're worried about, contract dates…"></textarea>
+    <div class="tools" style="margin-top:14px"><button class="solid" id="ncSave">Create client Radar</button><span class="note" id="ncMsg"></span></div></div>`;
+  document.getElementById("modal").classList.add("on"); document.getElementById("ncName").focus();
+}
+
+/* ===================== DATA ===================== */
+async function loadClients(){
+  try{ const j = await (await fetch("/api/clients")).json(); CLIENTS = j.clients || []; STATUS = j.status || {}; loaded = true; }
+  catch(e){ if(location.protocol!=="file:") document.getElementById("last").textContent = "offline"; }
+  if(!CLIENTS.some(c=>c.slug===CLIENT)) CLIENT = CLIENTS.length ? CLIENTS[0].slug : "";
+  store("client", CLIENT);
+  const sel = document.getElementById("clientSel"), sig = JSON.stringify(CLIENTS.map(c=>[c.slug,c.name]));
+  if(sel.dataset.sig === sig && sel.value === CLIENT) return;
+  sel.dataset.sig = sig;
+  sel.innerHTML = CLIENTS.length ? CLIENTS.map(c=>`<option value="${esc(c.slug)}">${esc(c.name)}</option>`).join("") : '<option value="">No clients yet</option>';
+  sel.value = CLIENT; sel.disabled = !CLIENTS.length;
+}
+async function load(force){
+  if(!CLIENT){ D = null; render(); return; }
+  try{
+    const d = await (await fetch("/api/data" + q(), {cache:"no-store"})).json();
+    if(d.error){ await loadClients(); return; }
+    const fresh = d.generated !== lastGen; D = d; lastGen = d.generated;
+    if(fresh || force){ notifyNew(); const modalOpen = document.getElementById("modal").classList.contains("on"); if(!modalOpen || force) render(); }
+  }catch(e){ document.getElementById("last").textContent = "offline"; }
+}
+async function loadPins(){ if(!CLIENT){ PINS = []; return; } try{ const j = await (await fetch("/api/pins" + q())).json(); PINS = Array.isArray(j) ? j : []; }catch(e){ PINS = []; } }
+async function savePins(){ try{ await post("/api/pins", {pins:PINS}); }catch(e){} }
+async function loadReports(){ if(!CLIENT){ REPORTS = []; return; } try{ REPORTS = (await (await fetch("/api/reports" + q())).json()).reports || []; }catch(e){ REPORTS = []; } }
+async function switchClient(slug){ CLIENT = slug; store("client", slug); lastGen = 0; D = null; netTopic = null; spreadTopic = null; feedSeen = new Set(); await loadClients(); await loadPins(); await loadReports(); await load(true); }
+function tickNext(){ const src = D || STATUS; if(!src || !src.next_at) return; const s = Math.max(0, Math.round(src.next_at - Date.now()/1000)); document.getElementById("next").textContent = s>0 ? `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}` : "checking…"; }
+function beep(){ try{ const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 660; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(.15, c.currentTime); o.start(); o.stop(c.currentTime + .25); }catch(e){} }
+function notifyNew(){
+  if(!D || !D.topics) return;
+  let seen; try{ seen = JSON.parse(store("seen")||"[]"); }catch(e){ seen = []; }
+  const fresh = [];
+  D.topics.filter(t=>t.spike).forEach(t=>{ const k = "spike:"+CLIENT+":"+t.query+":"+Math.floor(D.generated/3600); if(!seen.includes(k)){ seen.push(k); fresh.push([clientName()+" · SPIKE: "+(t.label||t.query), (t.headlines&&t.headlines[0]||{}).title||""]); }});
+  store("seen", JSON.stringify(seen.slice(-400)));
+  if(!fresh.length || store("notify")!=="on") return;
+  beep(); if("Notification" in window && Notification.permission==="granted") fresh.slice(0,3).forEach(([t,b])=>new Notification(t,{body:b}));
+}
+
+/* ===================== EVENTS ===================== */
+document.addEventListener("click", async e => {
+  const tp = e.target.closest("[data-topic]"); if(tp && !e.target.closest("a[href^='http']") && !e.target.closest("button[data-pin]")){ e.preventDefault(); openTopic(+tp.dataset.topic); return; }
+  const t = e.target.closest("button"); if(!t) return;
+  if(t.dataset.tab){ tab = t.dataset.tab; store("tab", tab); render(); window.scrollTo(0,0); return; }
+  if(t.dataset.net){ netTopic = t.dataset.net; render(); return; }
+  if(t.dataset.spread){ spreadTopic = t.dataset.spread; render(); return; }
+  if(t.dataset.gonet){ netTopic = t.dataset.gonet; tab = "network"; store("tab",tab); document.getElementById("modal").classList.remove("on"); render(); return; }
+  if(t.dataset.gospread){ spreadTopic = t.dataset.gospread; tab = "spread"; store("tab",tab); document.getElementById("modal").classList.remove("on"); render(); return; }
+  if(t.dataset.mf){ document.querySelectorAll("[data-mf]").forEach(b=>b.classList.toggle("on", b===t)); document.querySelectorAll("#modalItems [data-plat]").forEach(li=>li.classList.toggle("hide", t.dataset.mf!=="All" && li.dataset.plat!==t.dataset.mf)); return; }
+  if(t.dataset.pin){ e.stopPropagation(); const it = ITEMS[t.dataset.pin]; const k = key(it);
+    if(isPinned(it)){ PINS = PINS.filter(p=>p.key!==k); t.classList.remove("pinned"); } else { PINS.unshift({key:k,title:it.title,url:it.url,source:it.source,platform:it.platform,ts:it.ts,image:it.image||"",note:"",tag:"Lead",pinned_at:Date.now()}); t.classList.add("pinned"); }
+    savePins(); renderTabs(); return; }
+  if(t.dataset.unpin!==undefined){ PINS.splice(+t.dataset.unpin,1); savePins(); render(); return; }
+  if(t.id==="exportPins"){ const md = `# Case Board: ${clientName()}\n\n` + PINS.map(p=>`## ${p.title}\n- Label: ${p.tag}\n- Source: ${p.source} (${p.platform})\n- Link: ${p.url}\n- Pinned: ${new Date(p.pinned_at).toLocaleString()}\n${p.note?`- Note: ${p.note}\n`:""}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([md],{type:"text/markdown"})); a.download = "case-board-" + CLIENT + ".md"; a.click(); return; }
+  if(t.id==="clearPins"){ if(t.dataset.confirm!=="1"){ t.dataset.confirm="1"; t.textContent="Click again to clear"; return; } PINS = []; savePins(); render(); return; }
+  if(t.id==="checkNow"){ t.textContent = "Checking…"; try{ await fetch("/api/check",{method:"POST",body:"{}"}); }catch(err){} setTimeout(()=>t.textContent="Check now", 4000); return; }
+  if(t.id==="notifyBtn"){ const on = store("notify")==="on"; if(!on && "Notification" in window && Notification.permission!=="granted") await Notification.requestPermission(); store("notify", on ? "off" : "on"); t.textContent = "Alerts: " + (on ? "off" : "on"); if(!on) beep(); return; }
+  if(t.id==="clientView"){ openClientView(); return; }
+  if(t.id==="cvClose"){ document.getElementById("cv").classList.remove("on"); return; }
+  if(t.id==="cvPrint"){ window.print(); return; }
+  if(t.id==="newClient" || t.id==="newClient2"){ newClientForm(); return; }
+  if(t.id==="ncSave"){
+    const name = document.getElementById("ncName").value.trim(), m = document.getElementById("ncMsg");
+    if(name.length<2){ m.textContent = "Give the client a name."; return; }
+    t.disabled = true; m.textContent = "Setting up…";
+    try{ const j = await (await fetch("/api/clients",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name, issues:document.getElementById("ncIssues").value, competitors:document.getElementById("ncComps").value, notes:document.getElementById("ncNotes").value})})).json();
+      if(!j.client){ m.textContent = "Couldn't create: " + (j.error||""); t.disabled = false; return; }
+      document.getElementById("modal").classList.remove("on"); tab = "command"; store("tab", tab); await switchClient(j.client.slug);
+    }catch(err){ m.textContent = "Couldn't reach the Firm Radar. Is it running?"; t.disabled = false; }
+    return; }
+  if(t.id==="addTopic"){ const inp = document.getElementById("newTopic"), v = inp.value.trim(); if(!v) return; const j = await post("/api/watch",{topic:v}); inp.value = ""; inp.placeholder = j.added ? (j.added.startsWith("feed:") ? "Feed added: " + j.added.split(" title:")[1] + ". It appears after this round." : "Added. It appears after this round finishes.") : "Couldn't add: " + (j.error||""); return; }
+  if(t.id==="makeReport"){ const m = document.getElementById("repMsg"); t.disabled = true; m.textContent = "Writing the brief…";
+    try{ const j = await post("/api/report",{days:+document.getElementById("repDays").value}); if(!j.url){ m.textContent = "Couldn't make it: " + (j.error||""); t.disabled = false; return; }
+      window.open(j.url, "_blank"); await loadReports(); render(); const m2 = document.getElementById("repMsg"); if(m2) m2.textContent = `Done: ${j.topics} topics, ${j.hours} hours of data${j.snapshot?" (early read: history only just started)":""}. Saved in ${j.folder}`;
+    }catch(err){ m.textContent = "Couldn't reach the Firm Radar. Is it running?"; t.disabled = false; } return; }
+  if(t.id==="closeModal"){ document.getElementById("modal").classList.remove("on"); return; }
+  if(t.id==="rmTopic"){ if(t.dataset.confirm!=="1"){ t.dataset.confirm = "1"; t.textContent = "Click again to confirm"; return; } await post("/api/watch",{action:"remove",line:t.dataset.line}); document.getElementById("rmMsg").textContent = "Removed. It disappears after the next round."; t.disabled = true; return; }
+});
+document.addEventListener("click", e => { const h = e.target.closest(".hub"); if(h && window._netHighlight) window._netHighlight(h.dataset.hub); });
+document.addEventListener("keydown", e => { if(e.key==="Escape"){ document.getElementById("cv").classList.remove("on"); document.getElementById("modal").classList.remove("on"); } });
+document.addEventListener("change", e => {
+  if(e.target.id==="clientSel"){ switchClient(e.target.value); return; }
+  if(e.target.dataset.tagpin!==undefined){ PINS[+e.target.dataset.tagpin].tag = e.target.value; savePins(); }
+});
+document.addEventListener("input", e => {
+  if(e.target.dataset.notepin!==undefined){ PINS[+e.target.dataset.notepin].note = e.target.value; clearTimeout(window._nt); window._nt = setTimeout(savePins, 600); }
+  if(e.target.id==="search") applySearch();
+  if(e.target.id==="hl"){ store("hl", e.target.value); clearTimeout(window._ht); window._ht = setTimeout(()=>{ const pos = e.target.selectionStart; render(); const h = document.getElementById("hl"); if(h){ h.focus(); h.setSelectionRange(pos,pos); } }, 400); }
+});
+document.getElementById("modal").addEventListener("click", e => { if(e.target.id==="modal") e.currentTarget.classList.remove("on"); });
+document.getElementById("notifyBtn").textContent = "Alerts: " + (store("notify")==="on" ? "on" : "off");
+(async () => { await loadClients(); await loadPins(); await loadReports(); await load(true);
+  setInterval(async ()=>{ await loadClients(); if(!["network","spread"].includes(tab) || !D) await load(); }, 30000); setInterval(tickNext, 1000); })();
+</script>
+</body></html>

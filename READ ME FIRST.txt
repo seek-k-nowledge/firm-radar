@@ -1,0 +1,38 @@
+FIRM RADAR - client monitoring
+
+This is your client app. It is completely separate from your podcast Narrative Radar:
+its own folder, its own Start button, its own address.
+
+  Firm Radar (this folder)     http://localhost:8865   clients, crowd checks, weekly briefs
+  Podcast Narrative Radar      http://localhost:8765   your show's topics, viral, videos, breaking
+
+The only things you need in this folder:
+
+  Start Firm Radar        Double-click to start. Leave the black window open.
+  Open Firm Radar         Opens the client page (http://localhost:8865).
+  Install 24-7            One time: makes the Firm Radar start every time you log in.
+  Remove 24-7             Undoes that.
+
+The screens (tabs along the top):
+
+  COMMAND        Each client's operations room. The threat radar puts the client at the center;
+                 every topic is a blip, and the closer it is to the center, the more urgent.
+                 Color = crowd check, size = how much is being said, pulsing ring = spike.
+                 Next to it: the threat meter (0-100, and which topic drives it), the crowd
+                 check list, the live feed, the 48-hour pulse, and what to watch next.
+  OVERVIEW       The original Radar: one card per topic with every number. Add topics here.
+  NETWORK        Who is connected: accounts wired to the same message or the same link.
+                 A loose cloud is normal; a tight star of new accounts is worth checking.
+  SPREAD MAP     Where a story showed up (newsrooms, social, forums, video), in what order,
+                 with a replay.
+  CASE BOARD, ALERTS, REPORTS, SOURCES   Same as before. REPORTS makes the weekly brief.
+  CLIENT VIEW    (button, top right) A clean, light screen to share on a call. No account
+                 names, notes or evidence links.
+
+  + New Client   Sets up a private Radar for one client from their name, issues and competitors.
+
+Folders:
+
+  clients     One folder per client: client info, watchlist, reports, and saved data.
+              To stop watching a client, move their folder out of here.
+  engine      The program. Don't delete it.
